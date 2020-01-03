@@ -1,69 +1,43 @@
-Please submit your issues on [Ant-Media-Server](https://github.com/ant-media/Ant-Media-Server)
-
 # LiveVideoBroadcaster
-Native Android app that can broadcast and play live video via RTMP - It is developed by [Ant Media](http://antmedia.io)
+Native Android app that can broadcast and play live video via RTMP - It is developed by [Ant Media](http://antmedia.io) (feat. SubAkBa)
 
-## How to Develop a Live Streaming Mobile App in 3 Steps?
-Developing a live streaming mobile app is not a very quick and easy job if you develop every piece on your own. It requires extensive knowledge about video streaming etc.  so you may prefer to find some libraries and samples that makes this job easy. Yeah in this post, we are going to tell how to develop a live streaming app by providing sample codes on Github.
+## 3단계를 통해 라이브 스트리밍 앱을 쉽게 개발할 수 있다.
 
-Let's make it easy, you can develop a live streaming app in 3 general steps.
-
-### Step 1: Get a Media Server
-
-First of all, a live stream should be sent to a media server that can distributes the live stream to subscribers in real time so a media server should be running in somewhere like Amazon AWS, Google Cloud, IBM Bluemix or in any other infrastructure.  You may even use your own local computer to first test the app.
-
-Anyway, there are media servers you can purchase licence, fortunately you do not need to pay anything and you can download Ant Media Server Community Edition at antmedia.io. Ant Media Server can distribute live stream in RTMP, RTSP and HLS formats. Moreover, it records live streams in MP4 format. It means your live streams and recorded streams can play in both all mobile and desktop browsers.
-
-After you download Ant Media Server, extract it and run the start.sh file in your computer.
+### Step 1: Media Server 다운
+- URL : https://github.com/ant-media/ant-media-server
+- 위 URL에서 Media Server Repository를 clone한 후에 start.sh 파일을 실행한다.
 ```
 ./start.sh
 ```
-When you run this command, Ant Media Server starts with printing some logs. At this stage, please learn your computer IP address and save it somewhere. We will use this address later.
 
-### Step 2: Broadcast Live Stream from Your Mobile Device
-
-Yeah at this stage needs very specific knowledge luckily, we make it so simple that you do not need to know about encoding and packaging, you just need to call some functions. Nevertheless, I should say some technical issues. Here they are...
-
-H264 Hardware Encoders are used to encode the camera preview. It runs on Android 4.3 and above. Using hardware encoders make the mobile app very small and efficient.
-RTMP protocol is used to send the live stream to Media Server. We have used librtmp library to handle this issue.
-FLV format is used to send live stream to Media Server via RTMP protocol.
-This technical details are enough at this stage. So let's make hands dirty.
-
-Please clone this repository https://github.com/ant-media/LiveVideoBroadcaster
-
-git clone https://github.com/ant-media/LiveVideoBroadcaster.git
-
-After you clone the sample, please open the project with Android Studio and write your own media server IP address to RTMP_BASE_URL field on MainActivity.java file.
-
-Build and Run the app, you need to see below screen
-
+### Step 2: 모바일 기기에서 Live Streaming 하기
+- 원본 URL : https://github.com/ant-media/LiveVideoBroadcaster
+- 이 Repository는 본인의 프로젝트에 맞게 수정 했기 때문에 위 URL에 들어가 Repository를 clone한다.
+- clone한 뒤, 안드로이드 스튜디오에서 프로젝트를 열고 MainActivity.java 파일을 연다.
+- RMMP_BASE_URL 변수에 자기자신의 Media Server IP 주소를 입력한다.
+  
+- 앱을 빌드하고 실행하면, 아래와 같은 화면이 나온다.  
+  
 ![](http://antmedia.io/wp-content/uploads/2017/04/Screenshot_2017-04-16-17-06-22-e1492352365617.png)
-
-Click Live Video Broadcaster button and you should see this screen.
-
+  
+- Live Video Broadcaster 버튼을 클릭하고 연결이 되었다면, 아래 화면이 나올 것이다.  
+  
 ![](http://antmedia.io/wp-content/uploads/2017/04/record-e1492352687883.png)
-
-
-
-Write a stream name like "test" to edit text and press the button. You should see below screen.
-
+  
+- 예시로 Stream Name을 "test"로 입력하고 버튼을 클릭하면, 아래 화면이 나올 것이다.  
+  
 ![](http://antmedia.io/wp-content/uploads/2017/04/broadcastig-e1492352769543.png)
 
 
-Right now, you are broadcasting live stream to media server. Any subscriber can now watch  your live stream via media server.
+### Step 3: 모바일 기기에서 Live Streaming 보기
 
-### Step 3: Play Live Stream On your Mobile Device
-
-Playing a live stream on your android is not a hard thing to accomplish if your media server supports, RTSP or HLS. Fortunately, Ant Media Server supports both of them however, if you want to have low latency in live stream, it would be better to use RTMP so that we have added RTMP play functionality to ExoPlayer, moreover this player is already integrated to our sample. You just need to run LiveVideoBroadcaster app on any other android device.
-
-When you run it, please click the Live Video player at this time. You should see a black screen like below.
+- 현재 Live Streaming을 하고 있다면, Player를 실행하여 Streaming을 볼 수 있다.
+- 만약 Live Streaming을 하고 있지 않다면, 아래와 같은 검은 화면을 보게 될 것이다.
 
 ![](http://antmedia.io/wp-content/uploads/2017/04/Screenshot_2017-04-16-17-08-13-e1492352875527.png)
 
-Write down the same stream name you have used in Step 2 and press Play button. You should now watch the live stream that your other Android device broadcasts on your device.
+- 동일한 Stream name을 입력하고 Play 버튼을 클릭한다.
+- 그러면 아래 그림과 같이 현재 Streaming을 진행하고 있는 다른 기기를 현재 기기로 시청할 수 있다.
 
 ![](http://antmedia.io/wp-content/uploads/2017/04/Screenshot_2017-04-16-17-08-56-1-e1492352925734.png)
 
-
-
-Congratulations, that's all. If you have any question or need to get support (private or enterprise) please contact us antmedia.io.
