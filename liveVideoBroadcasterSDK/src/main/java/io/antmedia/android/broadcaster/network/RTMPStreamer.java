@@ -2,6 +2,7 @@ package io.antmedia.android.broadcaster.network;
 
 import android.app.Service;
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -9,12 +10,29 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.support.annotation.Nullable;
+import android.util.Base64;
 import android.util.Log;
 
 
 import net.butterflytv.rtmp_client.RTMPMuxer;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 
 import io.antmedia.android.broadcaster.network.IMediaMuxer;
@@ -22,15 +40,14 @@ import io.antmedia.android.broadcaster.network.IMediaMuxer;
 /**
  * Created by faraklit on 09.02.2016.
  */
-public class RTMPStreamer extends Handler implements IMediaMuxer  {
-
+public class RTMPStreamer extends Handler implements IMediaMuxer {
 
     private static final boolean DEBUG = false;
     private static final String TAG = RTMPStreamer.class.getSimpleName();
     RTMPMuxer rtmpMuxer = new RTMPMuxer();
 
     public int frameCount;
-    public  int result = 0;
+    public int result = 0;
     private int lastVideoFrameTimeStamp;
     private int lastAudioFrameTimeStamp;
     private int mLastReceivedVideoFrameTimeStamp = -1;
@@ -75,7 +92,6 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
     }
 
     /**
-     *
      * @param url of the stream
      */
     public boolean open(String url) {
@@ -125,8 +141,7 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
                     // otherwise discard the packet. If we don't discard it, rtmp connection totally drops
                     mLastReceivedAudioFrameTimeStamp = msg.arg2;
                     audioFrameList.add(new Frame((byte[]) msg.obj, msg.arg1, msg.arg2));
-                }
-                else {
+                } else {
                     Log.w(TAG, "discarding audio packet because time stamp is older than last packet or data lenth equal to zero");
                 }
                 sendFrames();
@@ -145,8 +160,7 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
                     // otherwise discard the packet. If we don't discard it, rtmp connection totally drops
                     mLastReceivedVideoFrameTimeStamp = msg.arg2;
                     videoFrameList.add(new Frame((byte[]) msg.obj, msg.arg1, msg.arg2));
-                }
-                else {
+                } else {
 
                     Log.w(TAG, "discarding videp packet because time stamp is older  than last packet or data lenth equal to zero");
                 }
@@ -160,11 +174,9 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
         }
 
 
-
     }
 
-    private void finishframes()
-    {
+    private void finishframes() {
         int videoFrameListSize, audioFrameListSize;
         do {
             sendFrames();
@@ -177,8 +189,7 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
         if (videoFrameListSize > 0) {
             //send all video frames remained in the list
             sendVideoFrames(videoFrameList.get(videoFrameListSize - 1).timestamp);
-        }
-        else if (audioFrameListSize > 0) {
+        } else if (audioFrameListSize > 0) {
             //send all audio frames remained in the list
             sendAudioFrames(audioFrameList.get(audioFrameListSize - 1).timestamp);
         }
@@ -203,11 +214,9 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
 
     private void sendAudioFrames(int timestamp) {
         Iterator<Frame> iterator = audioFrameList.iterator();
-        while (iterator.hasNext())
-        {
+        while (iterator.hasNext()) {
             Frame audioFrame = iterator.next();
-            if (audioFrame.timestamp <= timestamp)
-            {
+            if (audioFrame.timestamp <= timestamp) {
                 // frame time stamp should be equal or less than the previous timestamp
                 // in some cases timestamp of audio and video frames may be equal
                 if (audioFrame.timestamp >= lastSentFrameTimeStamp) {
@@ -232,8 +241,7 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
                     }
                 }
                 iterator.remove();
-            }
-            else {
+            } else {
                 //if timestamp is bigger than the auio frame timestamp
                 //it will be sent later so break the loop
                 break;
@@ -245,8 +253,11 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
         Iterator<Frame> iterator = videoFrameList.iterator();
         while (iterator.hasNext()) {
             Frame frame = iterator.next();
-            if ((frame.timestamp <= timestamp))
-            {
+
+            System.out.println("framedata : " + new String(frame.data));
+            new ServerConnection().execute("http://192.168.219.100:5000/getframe", new String(frame.data));
+
+            if ((frame.timestamp <= timestamp)) {
                 // frame time stamp should be equal or less than timestamp
                 // in some cases timestamp of audio and video frames may be equal
                 if (frame.timestamp >= lastSentFrameTimeStamp) {
@@ -270,8 +281,7 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
                 }
 
                 iterator.remove();
-            }
-            else {
+            } else {
                 //if frame timestamp is not smaller than the timestamp
                 // break the loop, it will be sent later
                 break;
@@ -344,6 +354,57 @@ public class RTMPStreamer extends Handler implements IMediaMuxer  {
     public int getVideoFrameCountInQueue() {
         synchronized (frameSynchronized) {
             return videoFrameList.size();
+        }
+    }
+
+    private class ServerConnection extends AsyncTask<String, Void, String>{
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+
+            Log.e("TAG", s);
+        }
+
+        @Override
+        protected String doInBackground(String... params) {
+            String data = "";
+            HttpURLConnection con = null;
+            JSONObject jsondata = new JSONObject();
+
+            try {
+                jsondata.put("full_frame", params[1]);
+
+                con = (HttpURLConnection) new URL(params[0]).openConnection();
+                con.setRequestMethod("POST");
+                con.setRequestProperty("Content-Type", "application/json");
+                con.setDoOutput(true);
+                con.setDoInput(true);
+                Writer writer = new BufferedWriter(new OutputStreamWriter(con.getOutputStream(), "UTF-8"));
+
+                writer.write(jsondata.toString());
+                writer.flush();
+                writer.close();
+
+                InputStreamReader inputStreamReader = new InputStreamReader(con.getInputStream());
+
+                int inputStreamData = inputStreamReader.read();
+                while (inputStreamData != -1) {
+                    char current = (char) inputStreamData;
+                    inputStreamData = inputStreamReader.read();
+                    data += current;
+                }
+
+                System.out.println("Return data : " + data);
+
+            } catch(Exception e){
+                System.out.println(e.getMessage());
+            }finally {
+                if(con != null)
+                    con.disconnect();
+            }
+
+
+            return data;
         }
     }
 }
