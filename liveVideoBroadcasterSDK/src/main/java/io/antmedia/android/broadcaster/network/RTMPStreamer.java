@@ -2,8 +2,11 @@ package io.antmedia.android.broadcaster.network;
 
 import android.app.Service;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 import android.os.Binder;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
@@ -13,7 +16,6 @@ import android.support.annotation.Nullable;
 import android.util.Base64;
 import android.util.Log;
 
-
 import net.butterflytv.rtmp_client.RTMPMuxer;
 
 import org.json.JSONException;
@@ -21,16 +23,22 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -42,7 +50,8 @@ import io.antmedia.android.broadcaster.network.IMediaMuxer;
  */
 public class RTMPStreamer extends Handler implements IMediaMuxer {
 
-    private static final boolean DEBUG = false;
+    static int count = 0;
+    private static final boolean DEBUG = true;
     private static final String TAG = RTMPStreamer.class.getSimpleName();
     RTMPMuxer rtmpMuxer = new RTMPMuxer();
 
@@ -253,159 +262,224 @@ public class RTMPStreamer extends Handler implements IMediaMuxer {
         Iterator<Frame> iterator = videoFrameList.iterator();
         while (iterator.hasNext()) {
             Frame frame = iterator.next();
+            int[] arr = new int[frame.data.length];
 
-            System.out.println("framedata : " + new String(frame.data));
-            new ServerConnection().execute("http://192.168.219.100:5000/getframe", new String(frame.data));
-
-            if ((frame.timestamp <= timestamp)) {
-                // frame time stamp should be equal or less than timestamp
-                // in some cases timestamp of audio and video frames may be equal
-                if (frame.timestamp >= lastSentFrameTimeStamp) {
-                    if (frame.timestamp == lastSentFrameTimeStamp) {
-                        frame.timestamp++;
-                    }
-                    if (isConnected) {
-                        int result = rtmpMuxer.writeVideo(frame.data, 0, frame.length, frame.timestamp);
-                        if (DEBUG) {
-                            Log.d(TAG, "send video result: " + result + " time:" + frame.timestamp + " length:" + frame.length);
-                        }
-                        if (result < 0) {
-                            close();
-                        }
-                    }
-                    lastVideoFrameTimeStamp = frame.timestamp;
-                    lastSentFrameTimeStamp = frame.timestamp;
-                    synchronized (frameSynchronized) {
-                        frameCount--;
-                    }
-                }
-
-                iterator.remove();
-            } else {
-                //if frame timestamp is not smaller than the timestamp
-                // break the loop, it will be sent later
-                break;
+            Log.d("prev frame : ", Arrays.toString(frame.data));
+            for (int i = 0; i < frame.length; i++) {
+                if (frame.data[i] < 0)
+                    arr[i] = frame.data[i] & 0xFF;
+                else
+                    arr[i] = frame.data[i];
             }
-        }
-    }
+//            Log.d("diff : ", frame.data[5] + " , " + arr[5] + " , " + (byte) arr[5]);
+//            Log.d("post frame : ", Arrays.toString(arr));
 
-    public int getLastAudioFrameTimeStamp() {
-        return lastAudioFrameTimeStamp;
-    }
+            String test = Base64.encodeToString(frame.data, 0);
 
-    public int getLastVideoFrameTimeStamp() {
-        return lastVideoFrameTimeStamp;
-    }
-
-    public void writeFLVHeader(boolean hasAudio, boolean hasVideo) {
-        rtmpMuxer.write_flv_header(hasAudio, hasVideo);
-    }
-
-    public void file_open(String s) {
-        rtmpMuxer.file_open(s);
-    }
+            System.out.println("please give me : " + test);
 
 
-    public void file_close() {
-        rtmpMuxer.file_close();
-    }
+            String ex_storage = Environment.getExternalStorageDirectory().getAbsolutePath(); // Get Absolute Path in External Sdcard
+            String file_name = "/frame.png";
+            String string_path = ex_storage;
 
-    public boolean isConnected() {
-        return isConnected;
-    }
+            Bitmap bitmap = Bitmap.createBitmap(50, 50, Bitmap.Config.ARGB_8888);
+            if(bitmap == null)
+                System.out.println("bitmap null");
 
-    @Override
-    public void writeAudio(byte[] data, int size, int presentationTime) {
-        Message message = obtainMessage(IMediaMuxer.SEND_AUDIO, data);
-        message.arg1 = size;
-        message.arg2 = presentationTime;
-        sendMessage(message);
-        synchronized (frameSynchronized) {
-            frameCount++;
-        }
-        if (DEBUG) Log.d(TAG, "writeAudio size: " + size + " time:" + presentationTime);
-    }
-
-    @Override
-    public void writeVideo(byte[] data, int length, int presentationTime) {
-        Message message = obtainMessage(IMediaMuxer.SEND_VIDEO, data);
-        message.arg1 = length;
-        message.arg2 = presentationTime;
-        sendMessage(message);
-        synchronized (frameSynchronized) {
-            frameCount++;
-        }
-
-        if (DEBUG) Log.d(TAG, "writeVideo size: " + length + " time:" + presentationTime);
-    }
-
-    @Override
-    public void stopMuxer() {
-        sendEmptyMessage(RTMPStreamer.STOP_STREAMING);
-    }
-
-    @Override
-    public int getFrameCountInQueue() {
-        synchronized (frameSynchronized) {
-            return frameCount;
-        }
-    }
-
-    public int getVideoFrameCountInQueue() {
-        synchronized (frameSynchronized) {
-            return videoFrameList.size();
-        }
-    }
-
-    private class ServerConnection extends AsyncTask<String, Void, String>{
-        @Override
-        protected void onPostExecute(String s) {
-            super.onPostExecute(s);
-
-            Log.e("TAG", s);
-        }
-
-        @Override
-        protected String doInBackground(String... params) {
-            String data = "";
-            HttpURLConnection con = null;
-            JSONObject jsondata = new JSONObject();
-
+            File file_path;
             try {
-                jsondata.put("full_frame", params[1]);
-
-                con = (HttpURLConnection) new URL(params[0]).openConnection();
-                con.setRequestMethod("POST");
-                con.setRequestProperty("Content-Type", "application/json");
-                con.setDoOutput(true);
-                con.setDoInput(true);
-                Writer writer = new BufferedWriter(new OutputStreamWriter(con.getOutputStream(), "UTF-8"));
-
-                writer.write(jsondata.toString());
-                writer.flush();
-                writer.close();
-
-                InputStreamReader inputStreamReader = new InputStreamReader(con.getInputStream());
-
-                int inputStreamData = inputStreamReader.read();
-                while (inputStreamData != -1) {
-                    char current = (char) inputStreamData;
-                    inputStreamData = inputStreamReader.read();
-                    data += current;
+                file_path = new File(string_path);
+                if (!file_path.isDirectory()) {
+                    file_path.mkdirs();
                 }
+                FileOutputStream out = new FileOutputStream(string_path + file_name);
 
-                System.out.println("Return data : " + data);
+                System.out.println("Path : " + string_path + file_name);
 
-            } catch(Exception e){
-                System.out.println(e.getMessage());
-            }finally {
-                if(con != null)
-                    con.disconnect();
+
+                bitmap.copyPixelsFromBuffer(IntBuffer.wrap(arr));
+                out.flush();
+                out.close();
+            } catch (FileNotFoundException exception) {
+                Log.e("FileNotFoundException", exception.getMessage());
+            } catch (IOException exception) {
+                Log.e("IOException", exception.getMessage());
             }
 
 
-            return data;
+//            System.out.println("byte Arrays : " + Arrays.toString(frame.data)); // (1)
+//
+//            byte[] testresult = Base64.decode(test, 0);
+//            System.out.println("byte Arrays2 : " + Arrays.toString(testresult)); // (2) -> (1)과 (2) 동일
+//            Bitmap bmp = null;
+//            Mat mat = new Mat();
+//            mat.put(0, 0, frame.data);
+//
+//            Mat imagemat = new Mat (1000, 1000, CvType.CV_8U, new Scalar(4));
+//            Imgproc.cvtColor(mat, imagemat, Imgproc.COLOR_GRAY2RGBA, 4);
+//            bmp = Bitmap.createBitmap(imagemat.cols(), imagemat.rows(), Bitmap.Config.ARGB_8888);
+//            Utils.matToBitmap(imagemat, bmp);
+//
+//            System.out.println("null check : " + (bmp == null));
+
+                try {
+
+//                new ServerConnection().execute("http://192.168.219.100:5000/getframe", new String(frame.data, "UTF-8"));
+                new ServerConnection().execute("http://192.168.219.100:5000/getframe", test);
+                } catch (Exception e) {
+                    e.getStackTrace();
+                }
+
+                if ((frame.timestamp <= timestamp)) {
+                    // frame time stamp should be equal or less than timestamp
+                    // in some cases timestamp of audio and video frames may be equal
+                    if (frame.timestamp >= lastSentFrameTimeStamp) {
+                        if (frame.timestamp == lastSentFrameTimeStamp) {
+                            frame.timestamp++;
+                        }
+                        if (isConnected) {
+                            int result = rtmpMuxer.writeVideo(frame.data, 0, frame.length, frame.timestamp);
+                            if (DEBUG) {
+                                Log.d(TAG, "send video result: " + result + " time:" + frame.timestamp + " length:" + frame.length);
+                            }
+                            if (result < 0) {
+                                close();
+                            }
+                        }
+                        lastVideoFrameTimeStamp = frame.timestamp;
+                        lastSentFrameTimeStamp = frame.timestamp;
+                        synchronized (frameSynchronized) {
+                            frameCount--;
+                        }
+                    }
+
+                    iterator.remove();
+                } else {
+                    //if frame timestamp is not smaller than the timestamp
+                    // break the loop, it will be sent later
+                    break;
+                }
+            }
+        }
+
+        public int getLastAudioFrameTimeStamp () {
+            return lastAudioFrameTimeStamp;
+        }
+
+        public int getLastVideoFrameTimeStamp () {
+            return lastVideoFrameTimeStamp;
+        }
+
+        public void writeFLVHeader ( boolean hasAudio, boolean hasVideo){
+            rtmpMuxer.write_flv_header(hasAudio, hasVideo);
+        }
+
+        public void file_open (String s){
+            rtmpMuxer.file_open(s);
+        }
+
+
+        public void file_close () {
+            rtmpMuxer.file_close();
+        }
+
+        public boolean isConnected () {
+            return isConnected;
+        }
+
+        @Override
+        public void writeAudio ( byte[] data, int size, int presentationTime){
+            Message message = obtainMessage(IMediaMuxer.SEND_AUDIO, data);
+            message.arg1 = size;
+            message.arg2 = presentationTime;
+            sendMessage(message);
+            synchronized (frameSynchronized) {
+                frameCount++;
+            }
+            if (DEBUG) Log.d(TAG, "writeAudio size: " + size + " time:" + presentationTime);
+        }
+
+        @Override
+        public void writeVideo ( byte[] data, int length, int presentationTime){
+            Message message = obtainMessage(IMediaMuxer.SEND_VIDEO, data);
+            message.arg1 = length;
+            message.arg2 = presentationTime;
+            sendMessage(message);
+            synchronized (frameSynchronized) {
+                frameCount++;
+            }
+
+            if (DEBUG) Log.d(TAG, "writeVideo size: " + length + " time:" + presentationTime);
+        }
+
+        @Override
+        public void stopMuxer () {
+            sendEmptyMessage(RTMPStreamer.STOP_STREAMING);
+        }
+
+        @Override
+        public int getFrameCountInQueue () {
+            synchronized (frameSynchronized) {
+                return frameCount;
+            }
+        }
+
+        public int getVideoFrameCountInQueue () {
+            synchronized (frameSynchronized) {
+                return videoFrameList.size();
+            }
+        }
+
+        private class ServerConnection extends AsyncTask<String, Void, String> {
+            @Override
+            protected void onPostExecute(String s) {
+                super.onPostExecute(s);
+
+                Log.e("TAG", s);
+            }
+
+            @Override
+            protected String doInBackground(String... params) {
+                String data = "";
+                HttpURLConnection con = null;
+                JSONObject jsondata = new JSONObject();
+
+                try {
+                    jsondata.put("full_frame", params[1]);
+
+                    con = (HttpURLConnection) new URL(params[0]).openConnection();
+                    con.setRequestMethod("POST");
+                    con.setRequestProperty("Content-Type", "application/json");
+                    con.setDoOutput(true);
+                    con.setDoInput(true);
+                    Writer writer = new BufferedWriter(new OutputStreamWriter(con.getOutputStream()));
+
+                    writer.write(jsondata.toString());
+                    writer.flush();
+                    writer.close();
+
+                    InputStreamReader inputStreamReader = new InputStreamReader(con.getInputStream());
+
+                    int inputStreamData = inputStreamReader.read();
+                    while (inputStreamData != -1) {
+                        char current = (char) inputStreamData;
+                        inputStreamData = inputStreamReader.read();
+                        data += current;
+                    }
+
+                    System.out.println("Return data : " + data);
+
+                } catch (Exception e) {
+                    System.out.println(e.getMessage());
+                } finally {
+                    if (con != null)
+                        con.disconnect();
+                }
+
+
+                return data;
+            }
         }
     }
-}
 
