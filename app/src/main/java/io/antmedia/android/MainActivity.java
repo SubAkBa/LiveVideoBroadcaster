@@ -13,12 +13,14 @@ public class MainActivity extends AppCompatActivity {
     /**
      * PLEASE WRITE RTMP BASE URL of the your RTMP SERVER.
      */
-    public static final String RTMP_BASE_URL = "rtmp://10.10.31.87/LiveApp/";
+    public static final String RTMP_BASE_URL = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(io.antmedia.android.liveVideoBroadcaster.R.layout.activity_main);
+
+//        System.loadLibrary("opencv_java4");
     }
 
     public void openVideoBroadcaster(View view) {
